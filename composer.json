@@ -1,0 +1,35 @@
+{
+  "name": "sam002/yii2-acme",
+
+  "type": "yii2-extension",
+
+  "description": "YII2 extension for certificate management using ACME (Automatic Certificate Management Environment)",
+  "keywords": ["yii2", "acme", "security", "tls", "letsencrypt", "certificate"],
+  "license": "LGPL-3.0",
+  "support": {
+    "issues": "https://github.com/sam002/yii2-acme/issues",
+    "source": "https://github.com/sam002/yii2-acme"
+  },
+  "authors": [
+    {
+      "name": "Semen Dubina",
+      "email": "yii2-https@sam002.net",
+      "homepage": "http://sam002.net/project/yii2-https",
+      "role": "Developer"
+    }
+  ],
+
+  "require": {
+    "yiisoft/yii2": "2.0.*",
+    "kelunik/acme": "^0.3"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "5.*"
+  },
+
+  "autoload": {
+    "psr-4": {
+      "sam002\\acme\\": "src"
+    }
+  }
+}
