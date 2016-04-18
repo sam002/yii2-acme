@@ -26,11 +26,6 @@
   "require-dev": {
     "phpunit/phpunit": "5.*"
   },
-  "extra": {
-    "branch-alias": {
-      "dev-develop": "develop"
-    }
-  },
   "autoload": {
     "psr-4": {
       "sam002\\acme\\": "src"
