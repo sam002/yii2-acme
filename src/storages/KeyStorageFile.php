@@ -5,16 +5,21 @@
  * Time: 2:24
  */
 
-namespace sam002\acme\storage;
+namespace sam002\acme\storages;
 
 use Amp\File\FilesystemException;
 use Kelunik\Acme\KeyPair;
 use yii\base\Exception;
-use yii\base\InvalidParamException;
-use yii\validators\FileValidator;
+use yii\helpers\FileHelper;
 
 class KeyStorageFile implements KeyStorageInterface
 {
+
+    /**
+     * @var string
+     */
+    public $root = '';
+
     /**
      * @param string $name
      * @return KeyPair
@@ -22,11 +27,10 @@ class KeyStorageFile implements KeyStorageInterface
     public function get($name = '')
     {
         $file = $this->getFileName($name);
-        $realPath = realpath($file);
-        if (!$realPath) {
-            throw new InvalidParamException("File not found: '{$file}'");
+        if (!$file) {
+            throw new FilesystemException("File not found: '{$file}'");
         }
-        $privateKey = (yield \Amp\File\get($realPath));
+        $privateKey = file_get_contents($file);
         $res = openssl_pkey_get_private($privateKey);
         if ($res === false) {
             throw new FilesystemException("Invalid private key: '{$file}'");
@@ -43,19 +47,13 @@ class KeyStorageFile implements KeyStorageInterface
      */
     public function put($name = '', KeyPair $keyPair)
     {
-        $validator = new FileValidator();
-        if(!$validator->validate($validator)) {
-            throw new InvalidParamException($validator->message);
-        }
-
         $file = $this->getFileName($name);
         try {
-            // TODO: Replace with async version once available
             if (!file_exists(dirname($file))) {
-                mkdir(dirname($file), 0755, true);
+                FileHelper::createDirectory(dirname($file), 0755, true);
             }
-            yield \Amp\File\put($file, $keyPair->getPrivate());
-            yield \Amp\File\chmod($file, 0600);
+            file_put_contents($file, $keyPair->getPrivate(), LOCK_EX);
+            chmod($file, 0600);
         } catch (FilesystemException $e) {
             throw new Exception("Could not save key.", 0, $e);
         }
@@ -64,7 +62,10 @@ class KeyStorageFile implements KeyStorageInterface
 
     private function getFileName($name)
     {
-        $path = \Yii::$app->runtimePath . "/acme/accounts/{$name}.pem";
+        if (empty($this->root)) {
+            $this->root = \Yii::$app->runtimePath . '/acme/';
+        }
+        $path = realpath($this->root . "{$name}.pem");
         return $path;
     }
 }

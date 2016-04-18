@@ -14,7 +14,7 @@
     {
       "name": "Semen Dubina",
       "email": "yii2-https@sam002.net",
-      "homepage": "http://sam002.net/project/yii2-https",
+      "homepage": "http://sam002.net/project/yii2-acme",
       "role": "Developer"
     }
   ],
@@ -26,7 +26,11 @@
   "require-dev": {
     "phpunit/phpunit": "5.*"
   },
-
+  "extra": {
+    "branch-alias": {
+      "dev-master": "develop"
+    }
+  },
   "autoload": {
     "psr-4": {
       "sam002\\acme\\": "src"

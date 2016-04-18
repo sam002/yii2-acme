@@ -8,12 +8,14 @@
 namespace sam002\acme;
 
 
+use Amp\CoroutineResult;
 use Amp\File\FilesystemException;
+use function Amp\run;
 use Kelunik\Acme\AcmeClient;
 use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\OpenSSLKeyGenerator;
 use Kelunik\Acme\Registration;
-use sam002\acme\storage\KeyStorageFile;
+use sam002\acme\storages\KeyStorageFile;
 use yii\base\InvalidConfigException;
 use yii\base\InvalidParamException;
 use yii\base\Module;
@@ -57,7 +59,7 @@ class Acme extends Module
     /**
      * @var int
      */
-    public $keyLength = 4096;
+    public $keyLength = 2048;
 
     /**
      * @var string
@@ -67,7 +69,7 @@ class Acme extends Module
     /**
      * @var string
      */
-    public $storage = 'sam002\acme\storage\KeyStorageFile';
+    public $storage = 'sam002\acme\storages\KeyStorageFile';
 
     /**
      * @var AcmeClient
@@ -79,21 +81,19 @@ class Acme extends Module
      */
     private $keyStore = null;
 
-
     public function init()
     {
         parent::init();
 
         $this->checkProviderUrl();
         $this->checkStore();
-        
+
     }
 
     /**
-     * @param string $url
      * @throws InvalidConfigException
      */
-    private function checkProviderUrl($url = '')
+    private function checkProviderUrl()
     {
 
         $validator = new UrlValidator();
@@ -105,13 +105,15 @@ class Acme extends Module
 
     private function checkStore()
     {
-        //todo check implementation and string as callback
-        if (!in_array('KeyStorageInterface', class_implements($this->storage))) {
-            throw new InvalidParamException('Storage class "' . $this->storage . '" not implements KeyStorageInterface');
+        if (!in_array('sam002\acme\storages\KeyStorageInterface', class_implements($this->storage))) {
+            throw new InvalidConfigException('Storage class "' . $this->storage . '" not implements KeyStorageInterface');
         }
     }
 
-    private function initStore()
+    /**
+     * @return KeyStorageFile
+     */
+    private function getKeyStore()
     {
         if (empty($this->keyStore)) {
             $this->keyStore = new $this->storage(FileHelper::normalizePath($this->location));
@@ -122,8 +124,18 @@ class Acme extends Module
     /**
      * @param $email
      * @return Registration
+     * @throws \Throwable
      */
-    public function register($email)
+    public function setup($email)
+    {
+        return \Amp\wait(\Amp\resolve($this->doSetup($email)));
+    }
+
+    /**
+     * @param $email
+     * @return \Generator
+     */
+    private function doSetup($email)
     {
         //check email
         $validator = new EmailValidator();
@@ -132,18 +144,31 @@ class Acme extends Module
             throw new InvalidParamException($validator->message);
         }
 
-        $keyFile = self::serverToKeyName($this->providerUrl);
-        $path = "accounts/{$keyFile}.pem";
+        $keyFile = self::serverToKeyName($this->providerUrl . '_' . $email);
 
         try {
-            $keyPair = (yield $this->keyStore->get($path));
+            $keyPair =$this->getKeyStore()->get($keyFile);
         } catch (FilesystemException $e) {
             $keyPair = (new OpenSSLKeyGenerator)->generate($this->keyLength);
-            $keyPair = (yield $this->keyStore->put($path, $keyPair));
+            $keyPair = $this->getKeyStore()->put($keyFile, $keyPair);
         }
         $acme = new AcmeService(new AcmeClient($this->providerUrl, $keyPair));
 
-        return $acme->register($email);
+        /** @var Registration $registration */
+        $registration = (yield $acme->register($email));
+
+        yield new CoroutineResult($registration);
+    }
+
+
+    public function issue($domains = [],$name = '')
+    {
+        return \Amp\wait($this->doIssue($domains, $name));
+    }
+
+    private function doIssue()
+    {
+        yield new CoroutineResult(0);
     }
 
     /**
