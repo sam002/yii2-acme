@@ -16,6 +16,7 @@ use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\OpenSSLKeyGenerator;
 use Kelunik\Acme\Registration;
 use sam002\acme\storages\KeyStorageFile;
+use yii\base\InvalidCallException;
 use yii\base\InvalidConfigException;
 use yii\base\InvalidParamException;
 use yii\base\Module;
@@ -35,7 +36,7 @@ use yii\validators\UrlValidator;
  *          'providerUrl' => Acme::PROVIDERS['letsencrypt:production']
  *          'keyLength' => 2048,
  *          'location' => './certs/',
- *          '$storage' => 'sam002\acme\storage\KeyStorageFile',
+ *          'storage' => 'sam002\acme\storage\KeyStorageFile',
  *     ]
  *     ...
  * ]
@@ -144,7 +145,7 @@ class Acme extends Module
             throw new InvalidParamException($validator->message);
         }
 
-        $keyFile = self::serverToKeyName($this->providerUrl . '_' . $email);
+        $keyFile = self::serverToKeyName($this->providerUrl);
 
         try {
             $keyPair =$this->getKeyStore()->get($keyFile);
@@ -161,13 +162,82 @@ class Acme extends Module
     }
 
 
-    public function issue($domains = [],$name = '')
+    /**
+     * @param array $domains
+     * @return mixed
+     * @throws \Throwable
+     */
+    public function issue($domains = [])
     {
-        return \Amp\wait($this->doIssue($domains, $name));
+        return \Amp\wait($this->doIssue($domains));
     }
 
-    private function doIssue()
+    /**
+     * @param $domains
+     * @return \Generator
+     * @throws AcmeException
+     */
+    private function doIssue($domains)
     {
+        //validate domains
+        yield \Amp\resolve($this->checkDnsRecords($domains));
+        $docRoots = explode(PATH_SEPARATOR, str_replace("\\", "/", $args->get("path")));
+
+        //todo check avalibles aliases an applications and find each roots
+        //If multiple roots
+        /*$docRoots = array_map(function ($root) {
+            return rtrim($root, "/");
+        }, $docRoots);
+        if (count($domains) < count($docRoots)) {
+            throw new AcmeException("Specified more document roots than domains.");
+        }
+        if (count($domains) > count($docRoots)) {
+            $docRoots = array_merge(
+                $docRoots,
+                array_fill(count($docRoots), count($domains) - count($docRoots), end($docRoots))
+            );
+        }*/
+
+        //todo find account key
+        $keyFile = self::serverToKeyName($this->providerUrl);
+
+        try {
+            $keyPair =$this->getKeyStore()->get($keyFile);
+        } catch (FilesystemException $e) {
+            throw new InvalidCallException("Account key not found, did you run 'yii acme/setup' or 'yii acme/quick'?", 0, $e);
+        }
+        $acme = new AcmeService(new AcmeClient($this->providerUrl, $keyPair));
+
+        //todo if multiple domains
+        $promises = [];
+        foreach ($domains as $i => $domain) {
+            $promises[] = \Amp\resolve($this->solveChallenge($acme, $keyPair, $domain, $docRoots[$i]));
+        }
+        list($errors) = (yield \Amp\any($promises));
+        if (!empty($errors)) {
+            foreach ($errors as $error) {
+                $this->climate->error($error->getMessage());
+            }
+            throw new AcmeException("Issuance failed, not all challenges could be solved.");
+        }
+
+        //todo generate path for new certificates
+        $path = "certs/" . $keyFile . "/" . reset($domains) . "/key.pem";
+        $bits = $args->get("bits");
+        try {
+            $keyPair = (yield $keyStore->get($path));
+        } catch (KeyStoreException $e) {
+            $keyPair = (new OpenSSLKeyGenerator)->generate($bits);
+            $keyPair = (yield $keyStore->put($path, $keyPair));
+        }
+
+        //todo save certivicates
+        $location = (yield $acme->requestCertificate($keyPair, $domains));
+        $certificates = (yield $acme->pollForCertificate($location));
+        $path = \Kelunik\AcmeClient\normalizePath($args->get("storage")) . "/certs/" . $keyFile;
+        $certificateStore = new CertificateStore($path);
+        yield $certificateStore->put($certificates);
+
         yield new CoroutineResult(0);
     }
 

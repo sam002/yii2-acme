@@ -12,6 +12,7 @@ use function Amp\run;
 use sam002\acme\Acme;
 use Yii;
 use yii\base\Exception;
+use yii\base\InvalidParamException;
 use yii\console\Controller;
 use yii\helpers\Console;
 use yii\validators\EmailValidator;
@@ -29,6 +30,7 @@ class AcmeController extends Controller
      * @var string controller default action ID.
      */
     public $defaultAction = 'quick';
+
     /**
      * @var string required, root directory of all source files.
      */
@@ -38,66 +40,58 @@ class AcmeController extends Controller
      * Quick setup, issue/renew certificates and print info.
      * For disabling interactive mode set first arguments as valid email and second argument as 'true'
      * @param string $email
-     * @param bool $force
      * @return int
      */
-    public function actionQuick($email = '', $force = false)
+    public function actionQuick($email = '')
     {
-
-        $validator = new EmailValidator();
-        if (!$validator->validate($email)) {
-            if ($force) {
-                $this->stdout($validator->message);
-                return Controller::EXIT_CODE_ERROR;
-            }
-            $email = $this->prompt('Email contact:', [
-                'validator' => function ($data) use ($validator) {
-                    return $validator->validate($data);
-                }
-            ]);
+        if (!$this->actionSetup($email)) {
+            return Controller::EXIT_CODE_ERROR;
         }
-        $this->actionSetup($email, $force);
-        //todo get list and statuses
+        $this->actionIssue([]);
         //todo renew old, issue for base url;
+        //todo get list and statuses
     }
 
 
     /**
      * Setup account by email
      * @param string $email
-     * @param bool $force
      * @return int
      */
-    public function actionSetup($email, $force = false)
+    public function actionSetup($email)
     {
-        if (!isset(\Yii::$app->acme)) {
-            if(!$force && $this->confirm("yii2-acme has default configuration. Advanced setup?", false)) {
-                $config = $this->advanced();
-            } else {
-                $this->stdout(sprintf("Setup for %s provider\n",  Acme::PROVIDERS['letsencrypt:production']));
-                $config = [
-                    'providerUrl' => Acme::PROVIDERS['letsencrypt:production']
-                ];
-            }
-            $acme = new Acme('acme', null, $config);
-        } else {
-            $acme = \Yii::$app->acme;
-        }
+        $email = $this->validateEmail($email);
+        $acme = $this->getAcme();
         try {
             $register = $acme->setup($email);
             $this->stdout("You success registered.\n");
-            $this->stdout(sprintf("Agreements: %s\n", $register->getAgreement()));
+            $this->stdout(sprintf("Please, read agreements: %s\n", $register->getAgreement()));
         } catch (Exception $e) {
-            $this->stderr("Something went wrong", Console::BOLD|Console::BG_RED);
+            $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
             $this->stderr($e->getMessage(), Console::BOLD);
             $this->stderr($e->getTraceAsString(), Console::ITALIC);
         }
         return Controller::EXIT_CODE_NORMAL;
     }
 
-    public function actionIssue(array $domains = [], $name = '') {
-        //todo Issure certificate
-        //todo print path and instruction link
+    public function actionIssue(array $domains = []) {
+        if (count($domains) > 100) {
+            $this->stderr("Maximum 100 domains per certificate", Console::FG_RED);
+            return Controller::EXIT_CODE_ERROR;
+        }
+
+        $domains = $this->interactive ? $this->domainsSet($domains) : [];
+
+        $acme = $this->getAcme();
+        try {
+            $acme->issue($domains);
+            $this->stdout("Certificate success registered.\n");
+        } catch (Exception $e) {
+            $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
+            $this->stderr($e->getMessage(), Console::BOLD);
+            $this->stderr($e->getTraceAsString(), Console::ITALIC);
+        }
+
         return Controller::EXIT_CODE_NORMAL;
     }
 
@@ -111,14 +105,57 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
-    public function actionInfo($name = '') {
+    public function actionInfo() {
         //todo list certificates and setup state
         return Controller::EXIT_CODE_NORMAL;
     }
 
+    /**
+     * @param $email
+     * @return int
+     */
+    private function validateEmail($email)
+    {
+        $validator = new EmailValidator();
+        if (!$validator->validate($email)) {
+            if (!$this->interactive) {
+                throw new InvalidParamException($validator->message);
+            }
+            $message = empty($email) ? "Email not set\n": "Email not valid\n";
+            $this->stdout($message);
+            $email = $this->prompt('Set email:', [
+                'validator' => function ($data) use ($validator) {
+                    return $validator->validate($data);
+                }
+            ]);
+        }
+        return $email;
+    }
+
+    private function getAcme()
+    {
+        if (!isset(\Yii::$app->acme)) {
+            if($this->interactive && $this->confirm("yii2-acme has default configuration. Advanced setup?", false)) {
+                $config = $this->advanced();
+            } else {
+                $this->stdout(sprintf("Setup for %s provider\n",  Acme::PROVIDERS['letsencrypt:production']));
+                $config = [
+                    'providerUrl' => Acme::PROVIDERS['letsencrypt:production']
+                ];
+            }
+            $acme = new Acme('acme', null, $config);
+        } else {
+            $acme = \Yii::$app->acme;
+        }
+        return $acme;
+    }
+
+    /**
+     * @return array
+     */
     private function advanced()
     {
-        $providerSelect = $this->select('Choose provider:', array_merge(Acme::PROVIDERS, ['custom'=>'interactive input a custom uri']));
+        $providerSelect = $this->select('Choose provider:', array_merge(Acme::PROVIDERS, ['custom'=>'input a custom uri']));
         if ($providerSelect === 'custom') {
             $provider = $this->prompt('Set ACME provider uri, directory path need', [
                 'validator' => function($data) {
@@ -140,5 +177,38 @@ class AcmeController extends Controller
                 'default'   => Yii::getAlias($this->sourcePath . '/acme')
             ]),
         ];
+    }
+
+    /**
+     * @param array $domains
+     * @return array
+     */
+    private function domainsSet($domains = [])
+    {
+        if (empty($domains) ||$this->confirm("Do need to set domains?", false)) {
+            $domainsSearched = array_filter(Yii::$aliases, function ($data) {
+                return filter_var($data, FILTER_VALIDATE_URL);
+            });
+            //todo unset selected and set first
+            $domains[0] = $this->select("Select main domain:", array_merge($domainsSearched, $domains));
+
+            while ($this->confirm("Do need to add a domain?", false)) {
+                $select[] = $this->prompt("Set additional domain (type 'done' for cancel):", [
+                    'default' => 'www' . $domains[0],
+                    'validate' => function ($input, &$error) use ($domains) {
+                        if(in_array($input, $domains)) {
+                            $error = "Always set";
+                            return false;
+                        }
+                        $urlValidator = new UrlValidator();
+                        $result = $urlValidator->validate($input);
+                        $error = $urlValidator->message;
+                        unset($urlValidator);
+                        return $result;
+                    }
+                ]);
+            }
+        }
+        return $domains;
     }
 }

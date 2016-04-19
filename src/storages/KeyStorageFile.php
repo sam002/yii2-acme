@@ -26,7 +26,7 @@ class KeyStorageFile implements KeyStorageInterface
      */
     public function get($name = '')
     {
-        $file = $this->getFileName($name);
+        $file = realpath($this->getFileName($name));
         if (!$file) {
             throw new FilesystemException("File not found: '{$file}'");
         }
@@ -65,7 +65,6 @@ class KeyStorageFile implements KeyStorageInterface
         if (empty($this->root)) {
             $this->root = \Yii::$app->runtimePath . '/acme/';
         }
-        $path = realpath($this->root . "{$name}.pem");
-        return $path;
+        return $this->root . "{$name}.pem";
     }
 }
