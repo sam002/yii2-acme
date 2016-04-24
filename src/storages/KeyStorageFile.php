@@ -63,7 +63,7 @@ class KeyStorageFile implements KeyStorageInterface
     private function getFileName($name)
     {
         if (empty($this->root)) {
-            $this->root = \Yii::$app->runtimePath . '/acme/';
+            $this->root = \Yii::$app->runtimePath . DIRECTORY_SEPARATOR . 'acme' . DIRECTORY_SEPARATOR;
         }
         return $this->root . "{$name}.pem";
     }

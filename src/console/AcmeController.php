@@ -185,10 +185,10 @@ class AcmeController extends Controller
      */
     private function domainsSet($domains = [])
     {
-        if (empty($domains) ||$this->confirm("Do need to set domains?", false)) {
-            $domainsSearched = array_filter(Yii::$aliases, function ($data) {
-                return filter_var($data, FILTER_VALIDATE_URL);
-            });
+        if (empty($domains) || $this->confirm("Do need to set domains?", false)) {
+            $domainsSearched = array_filter(Yii::$aliases, function ($data, $key) {
+                return is_string($key) && filter_var($data, FILTER_VALIDATE_URL) ;
+            }, ARRAY_FILTER_USE_BOTH);
             //todo unset selected and set first
             $domains[0] = $this->select("Select main domain:", array_merge($domainsSearched, $domains));
 

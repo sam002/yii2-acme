@@ -21,7 +21,8 @@
 
   "require": {
     "yiisoft/yii2": "2.0.*",
-    "kelunik/acme": "^0.3"
+    "kelunik/acme": "^0.3",
+    "kelunik/certificate": "^1"
   },
   "require-dev": {
     "phpunit/phpunit": "5.*"

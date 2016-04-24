@@ -7,21 +7,21 @@
 
 namespace sam002\acme;
 
-
-use Amp\CoroutineResult;
-use Amp\File\FilesystemException;
 use function Amp\run;
 use Kelunik\Acme\AcmeClient;
 use Kelunik\Acme\AcmeService;
-use Kelunik\Acme\OpenSSLKeyGenerator;
-use Kelunik\Acme\Registration;
+use Kelunik\Acme\KeyPair;
+use sam002\acme\resources\Issue;
+use sam002\acme\resources\Setup;
+use sam002\acme\storages\CertificateStorageFile;
+use sam002\acme\storages\CertificateStorageInterface;
+use sam002\acme\storages\ChallengeStorageInterface;
 use sam002\acme\storages\KeyStorageFile;
-use yii\base\InvalidCallException;
+use sam002\acme\storages\ChallengeStorageFile;
+use sam002\acme\storages\KeyStorageInterface;
 use yii\base\InvalidConfigException;
-use yii\base\InvalidParamException;
 use yii\base\Module;
 use yii\helpers\FileHelper;
-use yii\validators\EmailValidator;
 use yii\validators\UrlValidator;
 
 /**
@@ -32,11 +32,13 @@ use yii\validators\UrlValidator;
  * ~~~
  *  'module' => [
  *      'acme' => [
- *          'class' => 'sam002\otp\Otp',
+ *          'class' => 'sam002\acme\Acme',
  *          'providerUrl' => Acme::PROVIDERS['letsencrypt:production']
  *          'keyLength' => 2048,
  *          'location' => './certs/',
- *          'storage' => 'sam002\acme\storage\KeyStorageFile',
+ *          'keyStorage' => 'sam002\acme\storage\KeyStorageFile',
+ *          'certificateStorage' => 'sam002\acme\storage\CertificateStorageFile'
+ *          'challengeStorage' => 'sam002\acme\storage\ChallengeStorageFile'
  *     ]
  *     ...
  * ]
@@ -47,6 +49,9 @@ use yii\validators\UrlValidator;
  */
 class Acme extends Module
 {
+    use Setup;
+    use Issue;
+
     const PROVIDERS = [
             'letsencrypt:production' => 'https://acme-v01.api.letsencrypt.org/directory',
             'letsencrypt:staging' => 'https://acme-staging.api.letsencrypt.org/directory',
@@ -70,17 +75,26 @@ class Acme extends Module
     /**
      * @var string
      */
-    public $storage = 'sam002\acme\storages\KeyStorageFile';
+    public $keyStorage = 'sam002\acme\storages\KeyStorageFile';
 
     /**
-     * @var AcmeClient
+     * @var string
      */
-    private $client = null;
+    public $certificateStorage = 'sam002\acme\storages\CertificateStorageFile';
 
     /**
-     * @var KeyStorageFile
+     * @var string
      */
+    public $challengeStorage = 'sam002\acme\storages\ChallengeStorageFile';
+
+    /** @var KeyStorageInterface */
     private $keyStore = null;
+
+    /** @var CertificateStorageInterface */
+    private $certificateStore = null;
+
+    /** @var ChallengeStorageInterface */
+    private $challengeStore = null;
 
     public function init()
     {
@@ -88,6 +102,17 @@ class Acme extends Module
 
         $this->checkProviderUrl();
         $this->checkStore();
+        //Add
+        $this->controllerMap = [
+            'cert' => 'sam002\acme\console\AcmeController',
+            'acme-challenge' => function($event)
+            {
+                $challenge = $this->getChallengeStorage();
+                echo $challenge->get(basename(\Yii::$app->request->getPathInfo()));
+                \Yii::$app->response->send();
+                die();
+            }
+        ];
 
     }
 
@@ -106,148 +131,66 @@ class Acme extends Module
 
     private function checkStore()
     {
-        if (!in_array('sam002\acme\storages\KeyStorageInterface', class_implements($this->storage))) {
-            throw new InvalidConfigException('Storage class "' . $this->storage . '" not implements KeyStorageInterface');
+        if (!in_array('sam002\acme\storages\KeyStorageInterface', class_implements($this->keyStorage))) {
+            throw new InvalidConfigException('keyStorage class "' . $this->keyStorage . '" not implements KeyStorageInterface');
+        }
+
+        if (!in_array('sam002\acme\storages\CertificateStorageInterface', class_implements($this->certificateStorage))) {
+            throw new InvalidConfigException('CertificateStorage class "' . $this->certificateStorage . '" not implements CertificateStorageInterface');
         }
     }
 
     /**
      * @return KeyStorageFile
      */
-    private function getKeyStore()
+    protected function getKeyStorage()
     {
         if (empty($this->keyStore)) {
-            $this->keyStore = new $this->storage(FileHelper::normalizePath($this->location));
+            $this->keyStore = new $this->keyStorage(FileHelper::normalizePath($this->location));
         }
         return $this->keyStore;
     }
 
     /**
-     * @param $email
-     * @return Registration
-     * @throws \Throwable
+     * @return CertificateStorageFile
      */
-    public function setup($email)
+    protected function getCertificateStorage()
     {
-        return \Amp\wait(\Amp\resolve($this->doSetup($email)));
+
+        if (empty($this->certificateStore)) {
+            $this->certificateStore = new $this->certificateStorage(FileHelper::normalizePath($this->location));
+        }
+        return $this->certificateStore;
     }
 
     /**
-     * @param $email
-     * @return \Generator
+     * @return ChallengeStorageFile
      */
-    private function doSetup($email)
+    protected function getChallengeStorage()
     {
-        //check email
-        $validator = new EmailValidator();
-        $validator->checkDNS = true;
-        if (!$validator->validate($email)) {
-            throw new InvalidParamException($validator->message);
+
+        if (empty($this->challengeStore)) {
+            $this->challengeStore = new $this->challengeStorage(FileHelper::normalizePath($this->location));
         }
-
-        $keyFile = self::serverToKeyName($this->providerUrl);
-
-        try {
-            $keyPair =$this->getKeyStore()->get($keyFile);
-        } catch (FilesystemException $e) {
-            $keyPair = (new OpenSSLKeyGenerator)->generate($this->keyLength);
-            $keyPair = $this->getKeyStore()->put($keyFile, $keyPair);
-        }
-        $acme = new AcmeService(new AcmeClient($this->providerUrl, $keyPair));
-
-        /** @var Registration $registration */
-        $registration = (yield $acme->register($email));
-
-        yield new CoroutineResult($registration);
-    }
-
-
-    /**
-     * @param array $domains
-     * @return mixed
-     * @throws \Throwable
-     */
-    public function issue($domains = [])
-    {
-        return \Amp\wait($this->doIssue($domains));
+        return $this->challengeStore;
     }
 
     /**
-     * @param $domains
-     * @return \Generator
-     * @throws AcmeException
+     * @param KeyPair $keyPair
+     * @return AcmeService
      */
-    private function doIssue($domains)
+    protected function getAcmeService(KeyPair $keyPair)
     {
-        //validate domains
-        yield \Amp\resolve($this->checkDnsRecords($domains));
-        $docRoots = explode(PATH_SEPARATOR, str_replace("\\", "/", $args->get("path")));
-
-        //todo check avalibles aliases an applications and find each roots
-        //If multiple roots
-        /*$docRoots = array_map(function ($root) {
-            return rtrim($root, "/");
-        }, $docRoots);
-        if (count($domains) < count($docRoots)) {
-            throw new AcmeException("Specified more document roots than domains.");
-        }
-        if (count($domains) > count($docRoots)) {
-            $docRoots = array_merge(
-                $docRoots,
-                array_fill(count($docRoots), count($domains) - count($docRoots), end($docRoots))
-            );
-        }*/
-
-        //todo find account key
-        $keyFile = self::serverToKeyName($this->providerUrl);
-
-        try {
-            $keyPair =$this->getKeyStore()->get($keyFile);
-        } catch (FilesystemException $e) {
-            throw new InvalidCallException("Account key not found, did you run 'yii acme/setup' or 'yii acme/quick'?", 0, $e);
-        }
-        $acme = new AcmeService(new AcmeClient($this->providerUrl, $keyPair));
-
-        //todo if multiple domains
-        $promises = [];
-        foreach ($domains as $i => $domain) {
-            $promises[] = \Amp\resolve($this->solveChallenge($acme, $keyPair, $domain, $docRoots[$i]));
-        }
-        list($errors) = (yield \Amp\any($promises));
-        if (!empty($errors)) {
-            foreach ($errors as $error) {
-                $this->climate->error($error->getMessage());
-            }
-            throw new AcmeException("Issuance failed, not all challenges could be solved.");
-        }
-
-        //todo generate path for new certificates
-        $path = "certs/" . $keyFile . "/" . reset($domains) . "/key.pem";
-        $bits = $args->get("bits");
-        try {
-            $keyPair = (yield $keyStore->get($path));
-        } catch (KeyStoreException $e) {
-            $keyPair = (new OpenSSLKeyGenerator)->generate($bits);
-            $keyPair = (yield $keyStore->put($path, $keyPair));
-        }
-
-        //todo save certivicates
-        $location = (yield $acme->requestCertificate($keyPair, $domains));
-        $certificates = (yield $acme->pollForCertificate($location));
-        $path = \Kelunik\AcmeClient\normalizePath($args->get("storage")) . "/certs/" . $keyFile;
-        $certificateStore = new CertificateStore($path);
-        yield $certificateStore->put($certificates);
-
-        yield new CoroutineResult(0);
+        return new AcmeService(new AcmeClient($this->providerUrl, $keyPair));
     }
+
 
     /**
      * Transforms a directory URI to a valid filename for usage as key file name.
-     *
      * @param string $server URI to the directory
      * @return string identifier usable as file name
      */
-    static function serverToKeyName($server)
+    protected function serverToKeyName($server)
     {
         $server = substr($server, strpos($server, "://") + 3);
         $keyFile = str_replace("/", ".", $server);
