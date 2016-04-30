@@ -99,12 +99,12 @@ trait Issue
         }
 
         //todo generate path for new certificates
-        $path = "certs/" . $keyFile . "/" . reset($domains) . "/key.pem";
+        $path = "certs/" . $keyFile . "/" . reset($domains) . "/key";
         try {
-            $keyPair = (yield $this->getKeyStorage()->get($path));
+            $keyPair = $this->getKeyStorage()->get($path);
         } catch (FilesystemException $e) {
             $keyPair = (new OpenSSLKeyGenerator)->generate($this->keyLength);
-            $keyPair = (yield $this->getKeyStorage()->put($path, $keyPair));
+            $keyPair = $this->getKeyStorage()->put($path, $keyPair);
         }
 
         //todo save certivicates
@@ -112,7 +112,8 @@ trait Issue
         $certificates = (yield $acme->pollForCertificate($location));
 //        $path = \Kelunik\AcmeClient\normalizePath($args->get("storage")) . "/certs/" . $keyFile;
         $certificateStore = $this->getCertificateStorage();
-        yield $certificateStore->put($certificates);
+        sleep(3);
+        $certificateStore->put($certificates);
 
         yield new CoroutineResult(0);
     }

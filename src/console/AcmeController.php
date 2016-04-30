@@ -74,7 +74,13 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
-    public function actionIssue(array $domains = []) {
+    /**
+     * Issue
+     * @param array $domains
+     * @return int
+     */
+    public function actionIssue(array $domains = [])
+    {
         if (count($domains) > 100) {
             $this->stderr("Maximum 100 domains per certificate", Console::FG_RED);
             return Controller::EXIT_CODE_ERROR;
@@ -155,7 +161,9 @@ class AcmeController extends Controller
      */
     private function advanced()
     {
-        $providerSelect = $this->select('Choose provider:', array_merge(Acme::PROVIDERS, ['custom'=>'input a custom uri']));
+        $providerSelect = $this->select('Choose provider:', array_merge(Acme::PROVIDERS, [
+            'custom'=>'input a custom uri'
+        ]));
         if ($providerSelect === 'custom') {
             $provider = $this->prompt('Set ACME provider uri, directory path need', [
                 'validator' => function($data) {

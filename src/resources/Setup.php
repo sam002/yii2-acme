@@ -61,7 +61,7 @@ trait Setup
             throw new InvalidParamException($validator->message);
         }
 
-        $keyFile = $this->serverToKeyName($this->providerUrl);
+        $keyFile =  'challenge' . DIRECTORY_SEPARATOR . $this->serverToKeyName($this->providerUrl);
 
         try {
             $keyPair = $this->getKeyStorage()->get($keyFile);

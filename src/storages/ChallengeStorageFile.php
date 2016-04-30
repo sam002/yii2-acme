@@ -14,7 +14,7 @@ use yii\base\InvalidParamException;
 class ChallengeStorageFile implements ChallengeStorageInterface
 {
 
-    private $root = '';
+    public $root = '';
 
     /**
      * @param string $token
@@ -52,7 +52,7 @@ class ChallengeStorageFile implements ChallengeStorageInterface
     private function getFileName($name)
     {
         if (empty($this->root)) {
-            $this->root = \Yii::$app->runtimePath . DIRECTORY_SEPARATOR . 'acme' . DIRECTORY_SEPARATOR . 'challenge' . DIRECTORY_SEPARATOR ;
+            $this->root = \Yii::$app->runtimePath . DIRECTORY_SEPARATOR . 'acme' . DIRECTORY_SEPARATOR;
         }
         return $this->root . "{$name}";
     }

@@ -156,7 +156,6 @@ class Acme extends Module
      */
     protected function getCertificateStorage()
     {
-
         if (empty($this->certificateStore)) {
             $this->certificateStore = new $this->certificateStorage(FileHelper::normalizePath($this->location));
         }
@@ -168,7 +167,6 @@ class Acme extends Module
      */
     protected function getChallengeStorage()
     {
-
         if (empty($this->challengeStore)) {
             $this->challengeStore = new $this->challengeStorage(FileHelper::normalizePath($this->location));
         }
