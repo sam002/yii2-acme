@@ -13,11 +13,11 @@ use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\KeyPair;
 use sam002\acme\resources\Issue;
 use sam002\acme\resources\Setup;
-use sam002\acme\storages\CertificateStorageFile;
+use sam002\acme\storages\file\CertificateStorageFile;
 use sam002\acme\storages\CertificateStorageInterface;
 use sam002\acme\storages\ChallengeStorageInterface;
-use sam002\acme\storages\KeyStorageFile;
-use sam002\acme\storages\ChallengeStorageFile;
+use sam002\acme\storages\file\KeyStorageFile;
+use sam002\acme\storages\file\ChallengeStorageFile;
 use sam002\acme\storages\KeyStorageInterface;
 use yii\base\InvalidConfigException;
 use yii\base\Module;
@@ -75,17 +75,17 @@ class Acme extends Module
     /**
      * @var string
      */
-    public $keyStorage = 'sam002\acme\storages\KeyStorageFile';
+    public $keyStorage = 'sam002\acme\storages\file\KeyStorageFile';
 
     /**
      * @var string
      */
-    public $certificateStorage = 'sam002\acme\storages\CertificateStorageFile';
+    public $certificateStorage = 'sam002\acme\storages\file\CertificateStorageFile';
 
     /**
      * @var string
      */
-    public $challengeStorage = 'sam002\acme\storages\ChallengeStorageFile';
+    public $challengeStorage = 'sam002\acme\storages\file\ChallengeStorageFile';
 
     /** @var KeyStorageInterface */
     private $keyStore = null;
@@ -105,7 +105,7 @@ class Acme extends Module
         //Add
         $this->controllerMap = [
             'cert' => 'sam002\acme\console\AcmeController',
-            'acme-challenge' => function($event)
+            'acme-challenge' => function()
             {
                 $challenge = $this->getChallengeStorage();
                 echo $challenge->get(basename(\Yii::$app->request->getPathInfo()));

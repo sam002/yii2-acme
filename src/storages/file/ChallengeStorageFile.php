@@ -5,17 +5,15 @@
  * Time: 21:03
  */
 
-namespace sam002\acme\storages;
+namespace sam002\acme\storages\file;
 
 
 use Amp\File\FilesystemException;
+use sam002\acme\storages\ChallengeStorageInterface;
 use yii\base\InvalidParamException;
 
-class ChallengeStorageFile implements ChallengeStorageInterface
+class ChallengeStorageFile  extends FileStorage implements ChallengeStorageInterface
 {
-
-    public $root = '';
-
     /**
      * @param string $token
      * @return string
@@ -51,9 +49,6 @@ class ChallengeStorageFile implements ChallengeStorageInterface
 
     private function getFileName($name)
     {
-        if (empty($this->root)) {
-            $this->root = \Yii::$app->runtimePath . DIRECTORY_SEPARATOR . 'acme' . DIRECTORY_SEPARATOR;
-        }
-        return $this->root . "{$name}";
+        return $this->getRoot() . DIRECTORY_SEPARATOR . 'challenge' . DIRECTORY_SEPARATOR . "{$name}";
     }
 }

@@ -81,11 +81,13 @@ class AcmeController extends Controller
      */
     public function actionIssue(array $domains = [])
     {
+        //Manual control...
         if (count($domains) > 100) {
             $this->stderr("Maximum 100 domains per certificate", Console::FG_RED);
             return Controller::EXIT_CODE_ERROR;
         }
 
+        //setup domains
         $domains = $this->interactive ? $this->domainsSet($domains) : [];
 
         $acme = $this->getAcme();
@@ -127,7 +129,7 @@ class AcmeController extends Controller
             if (!$this->interactive) {
                 throw new InvalidParamException($validator->message);
             }
-            $message = empty($email) ? "Email not set\n": "Email not valid\n";
+            $message = empty($email) ? "Email is empty\n": "Email not valid\n";
             $this->stdout($message);
             $email = $this->prompt('Set email:', [
                 'validator' => function ($data) use ($validator) {
@@ -138,6 +140,10 @@ class AcmeController extends Controller
         return $email;
     }
 
+    /**
+     * Init Acme extension
+     * @return mixed|Acme
+     */
     private function getAcme()
     {
         if (!isset(\Yii::$app->acme)) {
@@ -157,6 +163,7 @@ class AcmeController extends Controller
     }
 
     /**
+     * Advanced configuration
      * @return array
      */
     private function advanced()
@@ -188,32 +195,44 @@ class AcmeController extends Controller
     }
 
     /**
+     * Set domains
      * @param array $domains
      * @return array
      */
     private function domainsSet($domains = [])
     {
-        if (empty($domains) || $this->confirm("Do need to set domains?", false)) {
+        if (empty($domains) || $this->confirm("Edit the list of domains?", false)) {
+            //force get available domains
             $domainsSearched = array_filter(Yii::$aliases, function ($data, $key) {
                 return is_string($key) && filter_var($data, FILTER_VALIDATE_URL) ;
             }, ARRAY_FILTER_USE_BOTH);
-            //todo unset selected and set first
-            $domains[0] = $this->select("Select main domain:", array_merge($domainsSearched, $domains));
+            if (empty($domains)) {
+                $domains = ['manual' => 'manual set'];
+            }
+
+            //validate prompt as URL
+            $urlValidation =  function ($input, &$error) use ($domains) {
+                if(in_array($input, $domains)) {
+                    $error = "Always set";
+                    return false;
+                }
+                $urlValidator = new UrlValidator();
+                $urlValidator->defaultScheme = 'http';
+                $result = $urlValidator->validate($input, $error);
+//                $error = $urlValidator->message;
+                unset($urlValidator);
+                return $result;
+            };
+
+            $checked = $this->select("Select main domain:", array_merge($domainsSearched, $domains));
+            $domains = [];
+            $domains[] = ($checked == 'manual') ? $this->prompt("Set domain:", [
+                'validator' => $urlValidation
+            ]) : $checked;
 
             while ($this->confirm("Do need to add a domain?", false)) {
                 $select[] = $this->prompt("Set additional domain (type 'done' for cancel):", [
-                    'default' => 'www' . $domains[0],
-                    'validate' => function ($input, &$error) use ($domains) {
-                        if(in_array($input, $domains)) {
-                            $error = "Always set";
-                            return false;
-                        }
-                        $urlValidator = new UrlValidator();
-                        $result = $urlValidator->validate($input);
-                        $error = $urlValidator->message;
-                        unset($urlValidator);
-                        return $result;
-                    }
+                    'validator' => $urlValidation
                 ]);
             }
         }

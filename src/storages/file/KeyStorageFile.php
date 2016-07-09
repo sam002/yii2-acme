@@ -5,21 +5,16 @@
  * Time: 2:24
  */
 
-namespace sam002\acme\storages;
+namespace sam002\acme\storages\file;
 
 use Amp\File\FilesystemException;
 use Kelunik\Acme\KeyPair;
+use sam002\acme\storages\KeyStorageInterface;
 use yii\base\Exception;
 use yii\helpers\FileHelper;
 
-class KeyStorageFile implements KeyStorageInterface
+class KeyStorageFile extends FileStorage implements KeyStorageInterface
 {
-
-    /**
-     * @var string
-     */
-    public $root = '';
-
     /**
      * @param string $name
      * @return KeyPair
@@ -50,9 +45,9 @@ class KeyStorageFile implements KeyStorageInterface
         $file = $this->getFileName($name);
         try {
             if (!file_exists(dirname($file))) {
-                FileHelper::createDirectory(dirname($file), 0755, true);
+                FileHelper::createDirectory(dirname($file));
             }
-            file_put_contents($file, $keyPair->getPrivate(), LOCK_EX);
+            file_put_contents($file, $keyPair->getPrivate());
             chmod($file, 0600);
         } catch (FilesystemException $e) {
             throw new Exception("Could not save key.", 0, $e);
@@ -62,9 +57,6 @@ class KeyStorageFile implements KeyStorageInterface
 
     private function getFileName($name)
     {
-        if (empty($this->root)) {
-            $this->root = \Yii::$app->runtimePath . DIRECTORY_SEPARATOR . 'acme' . DIRECTORY_SEPARATOR;
-        }
-        return $this->root . "{$name}.pem";
+        return $this->getRoot() . DIRECTORY_SEPARATOR . "{$name}.pem";
     }
 }

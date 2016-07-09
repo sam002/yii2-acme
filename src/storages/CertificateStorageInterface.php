@@ -18,10 +18,10 @@ interface CertificateStorageInterface
     public function get($name = '');
 
     /**
-     * @param Certificate $certificate
+     * @param array $certificates
      * @return boolean
      */
-    public function put(Certificate $certificate);
+    public function put($certificates = []);
 
     /**
      * @param string $name

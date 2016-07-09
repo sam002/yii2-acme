@@ -8,14 +8,16 @@
 namespace sam002\acme\resources;
 
 
+use Amp\CoroutineResult;
 use Amp\Dns\Record;
 use Amp\File\FilesystemException;
 use Kelunik\Acme\AcmeException;
 use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\KeyPair;
 use Kelunik\Acme\OpenSSLKeyGenerator;
-use sam002\acme\storages\CertificateStorageFile;
-use sam002\acme\storages\ChallengeStorageFile;
+use Kelunik\Certificate\Certificate;
+use sam002\acme\storages\file\CertificateStorageFile;
+use sam002\acme\storages\file\ChallengeStorageFile;
 use sam002\acme\storages\KeyStorageInterface;
 use yii\base\InvalidCallException;
 
@@ -74,8 +76,6 @@ trait Issue
         //todo check avalibles aliases an applications and find each roots
 //        $docRoots = explode(PATH_SEPARATOR, str_replace("\\", "/", $root));
 
-        $root = rtrim($root, DIRECTORY_SEPARATOR);
-
         //todo find account key
         $keyFile = $this->serverToKeyName($this->providerUrl);
 
@@ -99,7 +99,7 @@ trait Issue
         }
 
         //todo generate path for new certificates
-        $path = "certs/" . $keyFile . "/" . reset($domains) . "/key";
+        $path = "certs/" . reset($domains) . "/key.pem";
         try {
             $keyPair = $this->getKeyStorage()->get($path);
         } catch (FilesystemException $e) {
@@ -107,15 +107,13 @@ trait Issue
             $keyPair = $this->getKeyStorage()->put($path, $keyPair);
         }
 
-        //todo save certivicates
         $location = (yield $acme->requestCertificate($keyPair, $domains));
         $certificates = (yield $acme->pollForCertificate($location));
-//        $path = \Kelunik\AcmeClient\normalizePath($args->get("storage")) . "/certs/" . $keyFile;
-        $certificateStore = $this->getCertificateStorage();
-        sleep(3);
-        $certificateStore->put($certificates);
+        $path = "/certs/" . $keyFile;
 
-        yield new CoroutineResult(0);
+        $certificateStore = $this->getCertificateStorage($path);
+        $result = $certificateStore->put($certificates);
+        yield new CoroutineResult($result);
     }
 
     /**
@@ -157,14 +155,13 @@ trait Issue
             throw new AcmeException("Protocol violation: Invalid Token!");
         }
         $payload = $acme->generateHttp01Payload($keyPair, $token);
-        var_dump("    Providing payload at http://{$domain}/.well-known/acme-challenge/{$token}");
         $challengeStore = $this->getChallengeStorage();
         try {
             $challengeStore->put($token, $payload);
             yield $acme->verifyHttp01Challenge($domain, $token, $payload);
             yield $acme->answerChallenge($challenge->uri, $payload);
             yield $acme->pollForChallenge($location);
-            var_dump("    {$domain} is now authorized.");
+//            var_dump("    {$domain} is now authorized.");
             $challengeStore->delete($token);
         } catch (\Exception $e) {
             // no finally because generators...
