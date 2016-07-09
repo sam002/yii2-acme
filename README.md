@@ -15,12 +15,12 @@ The preferred way to install this extension is through [composer](http://getcomp
 Either run
 
 ```
-composer require sam002/yii2-https:~0.1
+composer require sam002/yii2-acme:~0.1
 ```
 or add
 
 ```json
-"sam002/yii2-https" : "~0.1"
+"sam002/yii2-acme" : "~0.1"
 ```
 
 to the require section of your application's `composer.json` file.
@@ -33,20 +33,37 @@ After extension is installed you need to setup auth client collection applicatio
 
 **Configure**
 
+Frontend (need to checked by certificate provider)
+
 ```php
-<?php
-use sam002\https\Https;
-
 ...
-
-'components' => [
-    'acme' => [
-        ...
+'module' => [
+    //Catch all requests on .well-known
+    '.well-known' => [
+        'class' => 'sam002\acme\Acme',
+        //optional
+        'location' => realpath('../runtime/acme'),
+        'providerUrl' => Acme::PROVIDERS['letsencrypt:production']
+        'keyLength' => 2048,
+        'keyStorage' => 'sam002\acme\storage\file\KeyStorageFile',
+        'certificateStorage' => 'sam002\acme\storage\file\CertificateStorageFile'
+        'challengeStorage' => 'sam002\acme\storage\file\ChallengeStorageFile'
     ],
-...
+    ...
 ]
 ```
 
+Console task
+
+```php
+...
+'controllerMap' => [
+    'acme' => [
+        'class' => 'sam002\acme\console\AcmeController'
+    ],
+    ...
+]
+```
 
 
 Further Information
@@ -65,5 +82,4 @@ Credits
 License
 -------
 
-The LGPLv3 License. Please see [License File](LICENSE.md) for more information.
-
+The LGPLv3 License. Please see [License File](LICENSE) for more information.
