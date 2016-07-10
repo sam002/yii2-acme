@@ -113,8 +113,26 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
+    /**
+     * Show info about certificates
+     * @return int
+     */
     public function actionInfo() {
-        //todo list certificates and setup state
+        $acme = $this->getAcme();
+        try {
+            $formatOutput = function($info = []){
+                if (isset($info['keys'])) {
+                    ;
+                }
+            };
+            $infoSrc = $acme->info();
+            var_dump($infoSrc); die;
+            $formatOutput($infoSrc);
+        } catch (Exception $e) {
+            $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
+            $this->stderr($e->getMessage(), Console::BOLD);
+            $this->stderr($e->getTraceAsString(), Console::ITALIC);
+        }
         return Controller::EXIT_CODE_NORMAL;
     }
 
