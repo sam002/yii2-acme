@@ -15,12 +15,12 @@ The preferred way to install this extension is through [composer](http://getcomp
 Either run
 
 ```
-composer require sam002/yii2-acme:~0.1
+composer require sam002/yii2-acme:~0.1.2
 ```
 or add
 
 ```json
-"sam002/yii2-acme" : "~0.1"
+"sam002/yii2-acme" : "~0.1.2"
 ```
 
 to the require section of your application's `composer.json` file.

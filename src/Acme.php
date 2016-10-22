@@ -7,10 +7,10 @@
 
 namespace sam002\acme;
 
-use function Amp\run;
 use Kelunik\Acme\AcmeClient;
 use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\KeyPair;
+use sam002\acme\controllers\AcmeChallengeController;
 use sam002\acme\resources\Info;
 use sam002\acme\resources\Issue;
 use sam002\acme\resources\Setup;
@@ -105,15 +105,8 @@ class Acme extends Module
         //Add
         $this->controllerMap = [
             'cert' => 'sam002\acme\console\AcmeController',
-            'acme-challenge' => function()
-            {
-                $challenge = $this->getChallengeStorage();
-                echo $challenge->get(basename(\Yii::$app->request->getPathInfo()));
-                \Yii::$app->response->send();
-                die();
-            }
+            'acme-challenge' => AcmeChallengeController::className()
         ];
-
     }
 
     /**
@@ -181,7 +174,7 @@ class Acme extends Module
     /**
      * @return ChallengeStorageFile
      */
-    protected function getChallengeStorage()
+    public function getChallengeStorage()
     {
         if (empty($this->challengeStore)) {
             $this->challengeStore = new $this->challengeStorage(FileHelper::normalizePath($this->location));
