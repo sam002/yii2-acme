@@ -1,5 +1,6 @@
 # yii2-acme
 
+[![SensioLabsInsight](https://insight.sensiolabs.com/projects/9dd3ed24-7678-47b4-a049-07d600b2928b/small.png)](https://insight.sensiolabs.com/projects/9dd3ed24-7678-47b4-a049-07d600b2928b)
 
 [![Latest Version](https://img.shields.io/github/tag/sam002/yii2-acme.svg?style=flat-square&label=releas)](https://github.com/sam002/yii2-acme/tags)
 [![Software License](https://img.shields.io/badge/license-LGPL3-brightgreen.svg?style=flat-square)](LICENSE.md)
@@ -15,12 +16,12 @@ The preferred way to install this extension is through [composer](http://getcomp
 Either run
 
 ```
-composer require sam002/yii2-acme:~0.1
+composer require sam002/yii2-acme:~0.1.2
 ```
 or add
 
 ```json
-"sam002/yii2-acme" : "~0.1"
+"sam002/yii2-acme" : "~0.1.2"
 ```
 
 to the require section of your application's `composer.json` file.

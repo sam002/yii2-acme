@@ -7,8 +7,6 @@
 
 namespace sam002\acme\storages\file;
 
-
-use Amp\File\FilesystemException;
 use Kelunik\Certificate\Certificate;
 use sam002\acme\storages\CertificateStorageInterface;
 use yii\base\InvalidParamException;
@@ -25,10 +23,8 @@ class CertificateStorageFile  extends FileStorage implements CertificateStorageI
      */
     public function get($name = '')
     {
-        if (empty($this->root)) {
-            $this->root = \Yii::$app->runtimePath . DIRECTORY_SEPARATOR . 'acme' . DIRECTORY_SEPARATOR;
-        }
-        return file_get_contents($this->root . $name . DIRECTORY_SEPARATOR . self::FILE_CERT);
+        $cert = file_get_contents($this->getFileName($name . DIRECTORY_SEPARATOR . self::FILE_CERT));
+        return new Certificate($cert);
     }
 
     /**
@@ -51,11 +47,6 @@ class CertificateStorageFile  extends FileStorage implements CertificateStorageI
 
         $chain = array_slice($certificates, 1);
 
-        $path = $this->getFileName("/");
-        $realpath = realpath(dirname($path));
-        if (!$realpath && !mkdir( dirname($path), 0775, true)) {
-            throw new FilesystemException("Couldn't create directory: '{$path}'");
-        }
         file_put_contents($this->getFileName(self::FILE_CERT), $certificates);
         $result = chmod($this->getFileName(self::FILE_CERT), 0644);
         file_put_contents($this->getFileName(self::FILE_FULLCHAIN), implode(PHP_EOL, array_merge($chain)));
@@ -83,6 +74,6 @@ class CertificateStorageFile  extends FileStorage implements CertificateStorageI
      */
     private function getFileName($name = "")
     {
-        return $this->getRoot() . DIRECTORY_SEPARATOR . 'certs' . DIRECTORY_SEPARATOR . "{$name}";
+        return $this->getRoot() . DIRECTORY_SEPARATOR . $name;
     }
 }

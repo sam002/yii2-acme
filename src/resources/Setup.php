@@ -35,7 +35,7 @@ trait Setup
      * @param $provider
      * @return mixed
      */
-    abstract protected function serverToKeyName($provider);
+    abstract protected function serverToKeyName($provider = '');
 
     /**
      * @param $email
@@ -61,7 +61,7 @@ trait Setup
             throw new InvalidParamException($validator->message);
         }
 
-        $keyFile =  $this->serverToKeyName($this->providerUrl);
+        $keyFile =  $this->serverToKeyName();
 
         try {
             $keyPair = $this->getKeyStorage()->get($keyFile);

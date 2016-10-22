@@ -10,7 +10,6 @@ namespace sam002\acme\storages\file;
 
 use Amp\File\FilesystemException;
 use sam002\acme\storages\ChallengeStorageInterface;
-use yii\base\InvalidParamException;
 
 class ChallengeStorageFile  extends FileStorage implements ChallengeStorageInterface
 {

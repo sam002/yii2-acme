@@ -7,7 +7,6 @@
 
 namespace sam002\acme\resources;
 
-
 use Amp\CoroutineResult;
 use Amp\Dns\Record;
 use Amp\File\FilesystemException;
@@ -15,7 +14,6 @@ use Kelunik\Acme\AcmeException;
 use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\KeyPair;
 use Kelunik\Acme\OpenSSLKeyGenerator;
-use Kelunik\Certificate\Certificate;
 use sam002\acme\storages\file\CertificateStorageFile;
 use sam002\acme\storages\file\ChallengeStorageFile;
 use sam002\acme\storages\KeyStorageInterface;
@@ -23,8 +21,6 @@ use yii\base\InvalidCallException;
 
 trait Issue
 {
-
-
     /**
      * @param KeyPair $keyPair
      * @return AcmeService
@@ -51,16 +47,16 @@ trait Issue
      * @param $provider
      * @return mixed
      */
-    abstract protected function serverToKeyName($provider);
+    abstract protected function serverToKeyName($provider = '');
 
     /**
      * @param array $domains
      * @return mixed
      * @throws \Throwable
      */
-    public function issue($domains = [], $root = '')
+    public function issue($domains = [])
     {
-        return \Amp\wait(\Amp\resolve($this->doIssue($domains, $root)));
+        return \Amp\wait(\Amp\resolve($this->doIssue($domains)));
     }
 
     /**
@@ -68,7 +64,7 @@ trait Issue
      * @return \Generator
      * @throws AcmeException
      */
-    private function doIssue($domains, $root)
+    private function doIssue($domains)
     {
         //validate domains
         yield \Amp\resolve($this->checkDnsRecords($domains));
@@ -77,7 +73,7 @@ trait Issue
 //        $docRoots = explode(PATH_SEPARATOR, str_replace("\\", "/", $root));
 
         //todo find account key
-        $keyFile = $this->serverToKeyName($this->providerUrl);
+        $keyFile = $this->serverToKeyName();
 
         try {
             $keyPair =$this->getKeyStorage()->get($keyFile);
@@ -93,25 +89,25 @@ trait Issue
         list($errors) = (yield \Amp\any($promises));
         if (!empty($errors)) {
             foreach ($errors as $error) {
-                var_dump($error->getMessage());
+                echo $error->getMessage() . PHP_EOL;
             }
             throw new AcmeException("Issuance failed, not all challenges could be solved.");
         }
 
-        //todo generate path for new certificates
-        $path = "certs/" . reset($domains) . "/key.pem";
+        $path = implode(DIRECTORY_SEPARATOR, ['certs', $this->serverToKeyName(), reset($domains)]);
+        $keyPath = $path . DIRECTORY_SEPARATOR . 'key';
         try {
-            $keyPair = $this->getKeyStorage()->get($path);
+            $keyPair = $this->getKeyStorage()->get($keyPath);
         } catch (FilesystemException $e) {
             $keyPair = (new OpenSSLKeyGenerator)->generate($this->keyLength);
-            $keyPair = $this->getKeyStorage()->put($path, $keyPair);
+            $keyPair = $this->getKeyStorage()->put($keyPath, $keyPair);
         }
 
         $location = (yield $acme->requestCertificate($keyPair, $domains));
         $certificates = (yield $acme->pollForCertificate($location));
-        $path = "/certs/" . $keyFile;
 
-        $certificateStore = $this->getCertificateStorage($path);
+        $certificateStore = $this->getCertificateStorage();
+        $certificateStore->setRoot($certificateStore->getRoot() . $path);
         $result = $certificateStore->put($certificates);
         yield new CoroutineResult($result);
     }
@@ -161,7 +157,6 @@ trait Issue
             yield $acme->verifyHttp01Challenge($domain, $token, $payload);
             yield $acme->answerChallenge($challenge->uri, $payload);
             yield $acme->pollForChallenge($location);
-//            var_dump("    {$domain} is now authorized.");
             $challengeStore->delete($token);
         } catch (\Exception $e) {
             // no finally because generators...

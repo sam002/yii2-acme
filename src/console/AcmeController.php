@@ -7,8 +7,7 @@
 
 namespace sam002\acme\console;
 
-
-use function Amp\run;
+use Kelunik\Certificate\Certificate;
 use sam002\acme\Acme;
 use Yii;
 use yii\base\Exception;
@@ -113,8 +112,48 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
+    /**
+     * Show info about certificates
+     * @return int
+     */
     public function actionInfo() {
-        //todo list certificates and setup state
+        $acme = $this->getAcme();
+        try {
+            $formatOutput = function(Certificate $cert){
+                $isExpired = (time() > $cert->getValidTo());
+                $colorExpired =  !$isExpired ? Console::FG_GREEN : Console::FG_RED;
+
+                $this->stdout("\n");
+                $this->stdout("Certificate ", Console::BOLD);
+                $this->stdout("{$cert->getSubject()->getCommonName()}\n", $colorExpired);
+
+                $this->stdout("Domains :\n");
+                foreach ($cert->getNames() as $name) {
+                    $this->stdout("\t {$name} \n", Console::ITALIC);
+                }
+                $this->stdout("Issued by: {$cert->getIssuer()->getCommonName()}\n");
+                $dateFrom = Yii::$app->formatter->asDatetime($cert->getValidFrom(), 'medium');
+                $this->stdout("Valid from: {$dateFrom}\n");
+
+                $dateTo = Yii::$app->formatter->asDatetime($cert->getValidTo(), 'medium');
+                $this->stdout("Valid to: {$dateTo}\n", $colorExpired);
+
+                if (!$isExpired) {
+                    $colorDateDiff = (time()*95*24*60*60 < $cert->getValidTo()) ? Console::FG_GREEN : Console::FG_YELLOW;
+                    $dateDiff = Yii::$app->formatter->asRelativeTime($cert->getValidTo(), $cert->getValidFrom());
+                    $this->stdout("Valid time left: {$dateDiff}\n", $colorDateDiff);
+                }
+
+            };
+            $infoSrc = $acme->info();
+            foreach ($infoSrc as $certInfo) {
+                $formatOutput($certInfo);
+            }
+        } catch (Exception $e) {
+            $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
+            $this->stderr($e->getMessage(), Console::BOLD);
+            $this->stderr($e->getTraceAsString(), Console::ITALIC);
+        }
         return Controller::EXIT_CODE_NORMAL;
     }
 
@@ -219,7 +258,6 @@ class AcmeController extends Controller
                 $urlValidator = new UrlValidator();
                 $urlValidator->defaultScheme = 'http';
                 $result = $urlValidator->validate($input, $error);
-//                $error = $urlValidator->message;
                 unset($urlValidator);
                 return $result;
             };
@@ -231,7 +269,7 @@ class AcmeController extends Controller
             ]) : $checked;
 
             while ($this->confirm("Do need to add a domain?", false)) {
-                $select[] = $this->prompt("Set additional domain (type 'done' for cancel):", [
+                $domains[] = $this->prompt("Set additional domain (type 'done' for cancel):", [
                     'validator' => $urlValidation
                 ]);
             }

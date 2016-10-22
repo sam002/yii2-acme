@@ -7,10 +7,11 @@
 
 namespace sam002\acme;
 
-use function Amp\run;
 use Kelunik\Acme\AcmeClient;
 use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\KeyPair;
+use sam002\acme\controllers\AcmeChallengeController;
+use sam002\acme\resources\Info;
 use sam002\acme\resources\Issue;
 use sam002\acme\resources\Setup;
 use sam002\acme\storages\file\CertificateStorageFile;
@@ -25,7 +26,7 @@ use yii\helpers\FileHelper;
 use yii\validators\UrlValidator;
 
 /**
- * Class Acme is a single otp module with initialization and code-validation
+ * Class Acme for certificate management using ACME (Automatic Certificate Management Environment) protocol
  *
  * Example application configuration:
  *
@@ -45,12 +46,11 @@ use yii\validators\UrlValidator;
  * ~~~
  *
  * @author Semen Dubina <sam@sam002.net>
- * @package sam002\otp
+ * @package sam002\acme
  */
 class Acme extends Module
 {
-    use Setup;
-    use Issue;
+    use Setup, Issue, Info;
 
     const PROVIDERS = [
             'letsencrypt:production' => 'https://acme-v01.api.letsencrypt.org/directory',
@@ -105,15 +105,8 @@ class Acme extends Module
         //Add
         $this->controllerMap = [
             'cert' => 'sam002\acme\console\AcmeController',
-            'acme-challenge' => function()
-            {
-                $challenge = $this->getChallengeStorage();
-                echo $challenge->get(basename(\Yii::$app->request->getPathInfo()));
-                \Yii::$app->response->send();
-                die();
-            }
+            'acme-challenge' => AcmeChallengeController::className()
         ];
-
     }
 
     /**
@@ -141,6 +134,22 @@ class Acme extends Module
     }
 
     /**
+     * @return string
+     */
+    public function getProviderUrl()
+    {
+        return $this->providerUrl;
+    }
+
+    /**
+     * @param string $providerUrl
+     */
+    public function setProviderUrl($providerUrl)
+    {
+        $this->providerUrl = $providerUrl;
+    }
+
+    /**
      * @return KeyStorageFile
      */
     protected function getKeyStorage()
@@ -165,7 +174,7 @@ class Acme extends Module
     /**
      * @return ChallengeStorageFile
      */
-    protected function getChallengeStorage()
+    public function getChallengeStorage()
     {
         if (empty($this->challengeStore)) {
             $this->challengeStore = new $this->challengeStorage(FileHelper::normalizePath($this->location));
@@ -188,8 +197,11 @@ class Acme extends Module
      * @param string $server URI to the directory
      * @return string identifier usable as file name
      */
-    protected function serverToKeyName($server)
+    protected function serverToKeyName($server = '')
     {
+        if (empty($server)) {
+            $server = $this->getProviderUrl();
+        }
         $server = substr($server, strpos($server, "://") + 3);
         $keyFile = str_replace("/", ".", $server);
         $keyFile = preg_replace("@[^a-z0-9._-]@", "", $keyFile);
