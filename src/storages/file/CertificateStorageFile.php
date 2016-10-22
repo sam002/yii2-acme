@@ -76,6 +76,6 @@ class CertificateStorageFile  extends FileStorage implements CertificateStorageI
      */
     private function getFileName($name = "")
     {
-        return $this->getRoot() . DIRECTORY_SEPARATOR . "{$name}";
+        return $this->getRoot() . DIRECTORY_SEPARATOR . $name;
     }
 }

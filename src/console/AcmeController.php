@@ -9,12 +9,15 @@ namespace sam002\acme\console;
 
 
 use function Amp\run;
+use Kelunik\Certificate\Certificate;
 use sam002\acme\Acme;
 use Yii;
 use yii\base\Exception;
 use yii\base\InvalidParamException;
 use yii\console\Controller;
 use yii\helpers\Console;
+use yii\helpers\FormatConverter;
+use yii\i18n\Formatter;
 use yii\validators\EmailValidator;
 use yii\validators\UrlValidator;
 
@@ -120,14 +123,36 @@ class AcmeController extends Controller
     public function actionInfo() {
         $acme = $this->getAcme();
         try {
-            $formatOutput = function($info = []){
-                if (isset($info['keys'])) {
-                    ;
+            $formatOutput = function(Certificate $cert){
+                $isExpired = (time() > $cert->getValidTo());
+                $colorExpired =  !$isExpired ? Console::FG_GREEN : Console::FG_RED;
+
+                $this->stdout("\n");
+                $this->stdout("Certificate ", Console::BOLD);
+                $this->stdout("{$cert->getSubject()->getCommonName()}\n", $colorExpired);
+
+                $this->stdout("Domains :\n");
+                foreach ($cert->getNames() as $name) {
+                    $this->stdout("\t {$name} \n", Console::ITALIC);
                 }
+                $this->stdout("Issued by: {$cert->getIssuer()->getCommonName()}\n");
+                $dateFrom = Yii::$app->formatter->asDatetime($cert->getValidFrom(), 'medium');
+                $this->stdout("Valid from: {$dateFrom}\n");
+
+                $dateTo = Yii::$app->formatter->asDatetime($cert->getValidTo(), 'medium');
+                $this->stdout("Valid to: {$dateTo}\n", $colorExpired);
+
+                if (!$isExpired) {
+                    $colorDateDiff = (time()*95*24*60*60 < $cert->getValidTo()) ? Console::FG_GREEN : Console::FG_YELLOW;
+                    $dateDiff = Yii::$app->formatter->asRelativeTime($cert->getValidTo(), $cert->getValidFrom());
+                    $this->stdout("Valid time left: {$dateDiff}\n", $colorDateDiff);
+                }
+
             };
             $infoSrc = $acme->info();
-            var_dump($infoSrc); die;
-            $formatOutput($infoSrc);
+            foreach ($infoSrc as $certInfo) {
+                $formatOutput($certInfo);
+            }
         } catch (Exception $e) {
             $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
             $this->stderr($e->getMessage(), Console::BOLD);

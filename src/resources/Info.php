@@ -9,13 +9,10 @@ namespace sam002\acme\resources;
 
 
 use Amp\CoroutineResult;
-use Amp\File\FilesystemException;
 use Kelunik\Acme\AcmeService;
 use Kelunik\Acme\KeyPair;
-use Kelunik\Certificate\Certificate;
 use sam002\acme\storages\file\CertificateStorageFile;
 use sam002\acme\storages\KeyStorageInterface;
-use yii\base\InvalidCallException;
 
 trait Info
 {
@@ -55,23 +52,12 @@ trait Info
     {
         $result = [];
         $keyFile = $this->serverToKeyName();
-        try {
-            $keyPair = $this->getKeyStorage()->get($keyFile);
-        } catch (FilesystemException $e) {
-            $keyPair = [];
-        }
-        $result[$this->getProviderUrl()]['keys'] = $keyPair;
 
         $certificateStore = $this->getCertificateStorage();
         $domains = (yield \Amp\File\scandir($certificateStore->getRoot() . '/certs/' . $this->serverToKeyName()));
         foreach ($domains as $domain) {
-            $pem = (yield $certificateStore->get($domain));
-            $cert = new Certificate($pem);
-            $result[$this->getProviderUrl()][$cert->getNames()] = $cert->getValidTo();
-//                if (time() < $cert->getValidTo() && time() + $args->get("ttl") * 24 * 60 * 60 > $cert->getValidTo()) {
-//                    $symbol = "<yellow> ⭮ </yellow>";
-//                }
-//                $this->climate->out("  [" . $symbol . "] " . implode(", ", $cert->getNames()));
+            $cert = $certificateStore->get('/certs/' . $keyFile . DIRECTORY_SEPARATOR . $domain);
+            $result[] = $cert;
         }
 
         yield new CoroutineResult($result);
