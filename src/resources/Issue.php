@@ -89,7 +89,7 @@ trait Issue
         list($errors) = (yield \Amp\any($promises));
         if (!empty($errors)) {
             foreach ($errors as $error) {
-                var_dump($error->getMessage());
+                echo $error->getMessage() . PHP_EOL;
             }
             throw new AcmeException("Issuance failed, not all challenges could be solved.");
         }
@@ -157,7 +157,6 @@ trait Issue
             yield $acme->verifyHttp01Challenge($domain, $token, $payload);
             yield $acme->answerChallenge($challenge->uri, $payload);
             yield $acme->pollForChallenge($location);
-//            var_dump("    {$domain} is now authorized.");
             $challengeStore->delete($token);
         } catch (\Exception $e) {
             // no finally because generators...

@@ -7,8 +7,6 @@
 
 namespace sam002\acme\console;
 
-
-use function Amp\run;
 use Kelunik\Certificate\Certificate;
 use sam002\acme\Acme;
 use Yii;
@@ -16,8 +14,6 @@ use yii\base\Exception;
 use yii\base\InvalidParamException;
 use yii\console\Controller;
 use yii\helpers\Console;
-use yii\helpers\FormatConverter;
-use yii\i18n\Formatter;
 use yii\validators\EmailValidator;
 use yii\validators\UrlValidator;
 
@@ -262,7 +258,6 @@ class AcmeController extends Controller
                 $urlValidator = new UrlValidator();
                 $urlValidator->defaultScheme = 'http';
                 $result = $urlValidator->validate($input, $error);
-//                $error = $urlValidator->message;
                 unset($urlValidator);
                 return $result;
             };
@@ -274,7 +269,7 @@ class AcmeController extends Controller
             ]) : $checked;
 
             while ($this->confirm("Do need to add a domain?", false)) {
-                $select[] = $this->prompt("Set additional domain (type 'done' for cancel):", [
+                $domains[] = $this->prompt("Set additional domain (type 'done' for cancel):", [
                     'validator' => $urlValidation
                 ]);
             }

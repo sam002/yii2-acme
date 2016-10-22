@@ -7,8 +7,6 @@
 
 namespace sam002\acme\storages\file;
 
-
-use Amp\File\FilesystemException;
 use Kelunik\Certificate\Certificate;
 use sam002\acme\storages\CertificateStorageInterface;
 use yii\base\InvalidParamException;
