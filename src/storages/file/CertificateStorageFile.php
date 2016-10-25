@@ -10,6 +10,7 @@ namespace sam002\acme\storages\file;
 use Kelunik\Certificate\Certificate;
 use sam002\acme\storages\CertificateStorageInterface;
 use yii\base\InvalidParamException;
+use yii\helpers\FileHelper;
 
 class CertificateStorageFile  extends FileStorage implements CertificateStorageInterface
 {
@@ -62,8 +63,8 @@ class CertificateStorageFile  extends FileStorage implements CertificateStorageI
      */
     public function delete($name = '')
     {
-        foreach (scandir($this->getFileName($name)) as $file) {
-            unlink($this->getFileName($name) . DIRECTORY_SEPARATOR . $file);
+        foreach (FileHelper::findFiles($this->getFileName($name)) as $file) {
+            unlink($file);
         }
         return rmdir($this->getFileName($name));
     }
