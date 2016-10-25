@@ -48,7 +48,7 @@ class AcmeController extends Controller
         }
         $this->actionIssue([]);
         //todo renew old, issue for base url;
-        //todo get list and statuses
+        $this->actionInfo();
     }
 
 
@@ -102,8 +102,65 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
+    /**
+     * @param string $name
+     * @return int
+     */
     public function actionRevoke($name = '') {
-        //todo revoke
+        $acme = $this->getAcme();
+        $formatOutput = function(Certificate $cert) {
+            $isExpired = (time() > $cert->getValidTo());
+            if($isExpired) {
+                return false;
+            }
+
+            $this->stdout("\n");
+            $this->stdout("Certificate ", Console::BOLD);
+            $this->stdout("{$cert->getSubject()->getCommonName()}\n", Console::FG_GREEN);
+
+            $this->stdout("Domains :");
+            $this->stdout(join(',', $cert->getNames()) . "\n", Console::ITALIC);
+
+            $this->stdout("Issued by: {$cert->getIssuer()->getCommonName()}\n");
+            $dateFrom = Yii::$app->formatter->asDatetime($cert->getValidFrom(), 'medium');
+            $this->stdout("Valid from: {$dateFrom}\n");
+
+            $dateTo = Yii::$app->formatter->asDatetime($cert->getValidTo(), 'medium');
+            $this->stdout("Valid to: {$dateTo}\n", Console::FG_GREEN);
+            return true;
+        };
+        try {
+            $infoSrc = $acme->info();
+            $certificates = [];
+            foreach ($infoSrc as $key => $certInfo) {
+                if($formatOutput($certInfo)) {
+                    $certificates[$key + 1] = $certInfo->getSubject()->getCommonName();
+                } elseif ($certInfo->getSubject()->getCommonName() === $name) {
+                    $this->stdout("Certificate did already expire, no need to revoke it.\n");
+                    return Controller::EXIT_CODE_NORMAL;
+                }
+            }
+
+            $revokeCert = $name;
+
+            if(empty($certificates)) {
+                $this->stderr("No valid certificates\n");
+                return Controller::EXIT_CODE_ERROR;
+            }
+            if (empty($name) || in_array($name, $certificates)) {
+                $this->stdout("\n");
+                $checked = $this->select("Select certificate:", $certificates);
+                $revokeCert = $certificates[$checked];
+            }
+
+            $acme->revoke($revokeCert);
+            $this->stdout("Certificate has been revoked\n");
+
+        } catch (Exception $e) {
+            $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
+            $this->stderr($e->getMessage(), Console::BOLD);
+            $this->stderr($e->getTraceAsString(), Console::ITALIC);
+        }
         return Controller::EXIT_CODE_NORMAL;
     }
 
@@ -185,7 +242,7 @@ class AcmeController extends Controller
      */
     private function getAcme()
     {
-        if (!isset(\Yii::$app->acme)) {
+        if (!\Yii::$app->has('acme')) {
             if($this->interactive && $this->confirm("yii2-acme has default configuration. Advanced setup?", false)) {
                 $config = $this->advanced();
             } else {

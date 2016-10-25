@@ -13,12 +13,10 @@ use Kelunik\Acme\KeyPair;
 use sam002\acme\controllers\AcmeChallengeController;
 use sam002\acme\resources\Info;
 use sam002\acme\resources\Issue;
+use sam002\acme\resources\Revoke;
 use sam002\acme\resources\Setup;
-use sam002\acme\storages\file\CertificateStorageFile;
 use sam002\acme\storages\CertificateStorageInterface;
 use sam002\acme\storages\ChallengeStorageInterface;
-use sam002\acme\storages\file\KeyStorageFile;
-use sam002\acme\storages\file\ChallengeStorageFile;
 use sam002\acme\storages\KeyStorageInterface;
 use yii\base\InvalidConfigException;
 use yii\base\Module;
@@ -50,7 +48,7 @@ use yii\validators\UrlValidator;
  */
 class Acme extends Module
 {
-    use Setup, Issue, Info;
+    use Setup, Issue, Info, Revoke;
 
     const PROVIDERS = [
             'letsencrypt:production' => 'https://acme-v01.api.letsencrypt.org/directory',
@@ -100,8 +98,6 @@ class Acme extends Module
     {
         parent::init();
 
-        $this->checkProviderUrl();
-        $this->checkStore();
         //Add
         $this->controllerMap = [
             'cert' => 'sam002\acme\console\AcmeController',
@@ -122,6 +118,9 @@ class Acme extends Module
         unset($validator);
     }
 
+    /**
+     * @throws InvalidConfigException
+     */
     private function checkStore()
     {
         if (!in_array('sam002\acme\storages\KeyStorageInterface', class_implements($this->keyStorage))) {
@@ -138,6 +137,7 @@ class Acme extends Module
      */
     public function getProviderUrl()
     {
+        $this->checkProviderUrl();
         return $this->providerUrl;
     }
 
@@ -150,29 +150,31 @@ class Acme extends Module
     }
 
     /**
-     * @return KeyStorageFile
+     * @return KeyStorageInterface
      */
     protected function getKeyStorage()
     {
         if (empty($this->keyStore)) {
             $this->keyStore = new $this->keyStorage(FileHelper::normalizePath($this->location));
         }
+        $this->checkStore();
         return $this->keyStore;
     }
 
     /**
-     * @return CertificateStorageFile
+     * @return CertificateStorageInterface
      */
     protected function getCertificateStorage()
     {
         if (empty($this->certificateStore)) {
             $this->certificateStore = new $this->certificateStorage(FileHelper::normalizePath($this->location));
         }
+        $this->checkStore();
         return $this->certificateStore;
     }
 
     /**
-     * @return ChallengeStorageFile
+     * @return ChallengeStorageInterface
      */
     public function getChallengeStorage()
     {
@@ -199,6 +201,7 @@ class Acme extends Module
      */
     protected function serverToKeyName($server = '')
     {
+        //todo find account key
         if (empty($server)) {
             $server = $this->getProviderUrl();
         }
