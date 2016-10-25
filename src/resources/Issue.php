@@ -70,9 +70,7 @@ trait Issue
         yield \Amp\resolve($this->checkDnsRecords($domains));
 
         //todo check avalibles aliases an applications and find each roots
-//        $docRoots = explode(PATH_SEPARATOR, str_replace("\\", "/", $root));
 
-        //todo find account key
         $keyFile = $this->serverToKeyName();
 
         try {
@@ -83,7 +81,7 @@ trait Issue
         $acme = $this->getAcmeService($keyPair);
 
         $promises = [];
-        foreach ($domains as $i => $domain) {
+        foreach ($domains as $domain) {
             $promises[] = \Amp\resolve($this->solveChallenge($acme, $keyPair, $domain));
         }
         list($errors) = (yield \Amp\any($promises));
@@ -178,13 +176,8 @@ trait Issue
         $combinations = isset($response->combinations) ? $response->combinations : [];
         $goodChallenges = [];
         foreach ($challenges as $i => $challenge) {
-            if ($challenge->type === "http-01") {
+            if ($challenge->type === "http-01" && in_array([$i], $combinations)) {
                 $goodChallenges[] = $i;
-            }
-        }
-        foreach ($goodChallenges as $i => $challenge) {
-            if (!in_array([$challenge], $combinations)) {
-                unset($goodChallenges[$i]);
             }
         }
         return $goodChallenges;

@@ -7,8 +7,6 @@
 
 namespace sam002\acme\storages;
 
-use Kelunik\Certificate\Certificate;
-
 interface CertificateStorageInterface
 {
     /**

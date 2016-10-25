@@ -65,7 +65,6 @@ trait Revoke
      */
     private function doRevoke($name = '')
     {
-        //todo find account key
         $keyFile = $this->serverToKeyName();
 
         try {

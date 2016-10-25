@@ -48,7 +48,7 @@ class AcmeController extends Controller
         }
         $this->actionIssue([]);
         //todo renew old, issue for base url;
-        //todo get list and statuses
+        $this->actionInfo();
     }
 
 
@@ -102,6 +102,10 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
+    /**
+     * @param string $name
+     * @return int
+     */
     public function actionRevoke($name = '') {
         $acme = $this->getAcme();
         $formatOutput = function(Certificate $cert) {
@@ -137,14 +141,13 @@ class AcmeController extends Controller
                 }
             }
 
+            $revokeCert = $name;
+
             if(empty($certificates)) {
                 $this->stderr("No valid certificates\n");
                 return Controller::EXIT_CODE_ERROR;
             }
-
-            if (!empty($name) && in_array($name, $certificates)) {
-                $revokeCert = $name;
-            } else {
+            if (empty($name) || in_array($name, $certificates)) {
                 $this->stdout("\n");
                 $checked = $this->select("Select certificate:", $certificates);
                 $revokeCert = $certificates[$checked];
