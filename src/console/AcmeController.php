@@ -47,7 +47,7 @@ class AcmeController extends Controller
             return Controller::EXIT_CODE_ERROR;
         }
         $this->actionIssue([]);
-        //todo renew old, issue for base url;
+        $this->actionRenew();
         $this->actionInfo();
     }
 
@@ -74,7 +74,7 @@ class AcmeController extends Controller
     }
 
     /**
-     * Issue
+     * Issue certificate for domains (comma separated)
      * @param array $domains
      * @return int
      */
@@ -103,37 +103,18 @@ class AcmeController extends Controller
     }
 
     /**
+     * Revoke certificate
      * @param string $name
      * @return int
      */
     public function actionRevoke($name = '') {
         $acme = $this->getAcme();
-        $formatOutput = function(Certificate $cert) {
-            $isExpired = (time() > $cert->getValidTo());
-            if($isExpired) {
-                return false;
-            }
-
-            $this->stdout("\n");
-            $this->stdout("Certificate ", Console::BOLD);
-            $this->stdout("{$cert->getSubject()->getCommonName()}\n", Console::FG_GREEN);
-
-            $this->stdout("Domains :");
-            $this->stdout(join(',', $cert->getNames()) . "\n", Console::ITALIC);
-
-            $this->stdout("Issued by: {$cert->getIssuer()->getCommonName()}\n");
-            $dateFrom = Yii::$app->formatter->asDatetime($cert->getValidFrom(), 'medium');
-            $this->stdout("Valid from: {$dateFrom}\n");
-
-            $dateTo = Yii::$app->formatter->asDatetime($cert->getValidTo(), 'medium');
-            $this->stdout("Valid to: {$dateTo}\n", Console::FG_GREEN);
-            return true;
-        };
         try {
             $infoSrc = $acme->info();
             $certificates = [];
             foreach ($infoSrc as $key => $certInfo) {
-                if($formatOutput($certInfo)) {
+                if(time() < $certInfo->getValidTo()) {
+                    $this->certificateInfo($certInfo);
                     $certificates[$key + 1] = $certInfo->getSubject()->getCommonName();
                 } elseif ($certInfo->getSubject()->getCommonName() === $name) {
                     $this->stdout("Certificate did already expire, no need to revoke it.\n");
@@ -164,47 +145,50 @@ class AcmeController extends Controller
         return Controller::EXIT_CODE_NORMAL;
     }
 
-    public function actionRenew($name = '') {
-        //todo renew certificate
+    /**
+     * Renew certificate. Argument: ttl (days left), default 1
+     * @param int $ttl
+     * @return int
+     */
+    public function actionRenew($ttl = 1) {
+        $acme = $this->getAcme();
+        try {
+            $infoSrc = $acme->info();
+            /* @var  Certificate $certificate */
+            foreach ($infoSrc as $certificate) {
+                if (time() + $ttl*24*60*60 > $certificate->getValidTo()) {
+                    $this->certificateInfo($certificate);
+
+                    //For if the certificate has not expired, I tell you we must revoking it.
+                    if (time() < $certificate->getValidTo()) {
+                        $acme->revoke($certificate->getSubject()->getCommonName());
+                        $this->stdout("Certificate {$certificate->getSubject()->getCommonName()} has been revoked\n");
+                    }
+
+                    $acme->issue($certificate->getNames());
+                    $this->stdout("Certificate {$certificate->getSubject()->getCommonName()} success renew.\n");
+                }
+            }
+
+        } catch (Exception $e) {
+            $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
+            $this->stderr($e->getMessage(), Console::BOLD);
+            $this->stderr($e->getTraceAsString(), Console::ITALIC);
+        }
         return Controller::EXIT_CODE_NORMAL;
     }
 
     /**
-     * Show info about certificates
+     * Show info about certificates.
+     * @param int $ttl
      * @return int
      */
-    public function actionInfo() {
+    public function actionInfo($ttl = 7) {
         $acme = $this->getAcme();
         try {
-            $formatOutput = function(Certificate $cert){
-                $isExpired = (time() > $cert->getValidTo());
-                $colorExpired =  !$isExpired ? Console::FG_GREEN : Console::FG_RED;
-
-                $this->stdout("\n");
-                $this->stdout("Certificate ", Console::BOLD);
-                $this->stdout("{$cert->getSubject()->getCommonName()}\n", $colorExpired);
-
-                $this->stdout("Domains :\n");
-                foreach ($cert->getNames() as $name) {
-                    $this->stdout("\t {$name} \n", Console::ITALIC);
-                }
-                $this->stdout("Issued by: {$cert->getIssuer()->getCommonName()}\n");
-                $dateFrom = Yii::$app->formatter->asDatetime($cert->getValidFrom(), 'medium');
-                $this->stdout("Valid from: {$dateFrom}\n");
-
-                $dateTo = Yii::$app->formatter->asDatetime($cert->getValidTo(), 'medium');
-                $this->stdout("Valid to: {$dateTo}\n", $colorExpired);
-
-                if (!$isExpired) {
-                    $colorDateDiff = (time()*95*24*60*60 < $cert->getValidTo()) ? Console::FG_GREEN : Console::FG_YELLOW;
-                    $dateDiff = Yii::$app->formatter->asRelativeTime($cert->getValidTo(), $cert->getValidFrom());
-                    $this->stdout("Valid time left: {$dateDiff}\n", $colorDateDiff);
-                }
-
-            };
             $infoSrc = $acme->info();
             foreach ($infoSrc as $certInfo) {
-                $formatOutput($certInfo);
+                $this->certificateInfo($certInfo, $ttl);
             }
         } catch (Exception $e) {
             $this->stderr("Something went wrong\n", Console::BOLD|Console::FG_RED);
@@ -212,6 +196,32 @@ class AcmeController extends Controller
             $this->stderr($e->getTraceAsString(), Console::ITALIC);
         }
         return Controller::EXIT_CODE_NORMAL;
+    }
+
+    private function certificateInfo(Certificate $certificate, $ttl = 0)
+    {
+        $isExpired = (time() > $certificate->getValidTo());
+        $colorExpired =  !$isExpired ? Console::FG_GREEN : Console::FG_RED;
+
+        $this->stdout("\n");
+        $this->stdout("Certificate ", Console::BOLD);
+        $this->stdout("{$certificate->getSubject()->getCommonName()}\n", $colorExpired);
+
+        $this->stdout("Domains :");
+        $this->stdout(join(',', $certificate->getNames()) . "\n", Console::ITALIC);
+
+        $this->stdout("Issued by: {$certificate->getIssuer()->getCommonName()}\n");
+        $dateFrom = Yii::$app->formatter->asDatetime($certificate->getValidFrom(), 'medium');
+        $this->stdout("Valid from: {$dateFrom}\n");
+
+        $dateTo = Yii::$app->formatter->asDatetime($certificate->getValidTo(), 'medium');
+        $this->stdout("Valid to: {$dateTo}\n", $colorExpired);
+
+        if (!$isExpired && $ttl > 0) {
+            $colorDateDiff = (time() + $ttl*24*60*60 < $certificate->getValidTo()) ? Console::FG_GREEN : Console::FG_YELLOW;
+            $dateDiff = Yii::$app->formatter->asRelativeTime($certificate->getValidTo(), $certificate->getValidFrom());
+            $this->stdout("Valid time left: {$dateDiff}\n", $colorDateDiff);
+        }
     }
 
     /**
